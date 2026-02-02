@@ -1,23 +1,16 @@
 ---
-import Layout from "../layouts/Layout.astro";
-import Header from "../components/Header.astro";
-import Hero from "../components/Hero.astro";
-import Features from "../components/Features.astro";
-import CTA from "../components/CTA.astro";
-import Footer from "../components/Footer.astro";
-import { SITE } from "../config/site.mjs";
+// src/pages/index.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getEntry } from 'astro:content';
+
+const page = await getEntry('pages', 'home');
+const { Content } = await page.render();
 ---
 
-<Layout
-  title={SITE.title}
-  description="A minimal, modern starter template for building fast websites with Astro. Includes React, Tailwind CSS, Framer Motion, and more."
-  canonicalURL={SITE.url}
->
-  <Header />
-  <main id="main-content" role="main">
-    <Hero />
-    <Features />
-    <CTA />
-  </main>
-  <Footer />
-</Layout>
+<BaseLayout ...>
+  <article class="prose prose-zinc dark:prose-invert 
+    prose-h1:font-mono prose-h1:tracking-tighter 
+    max-w-none">
+    <Content />
+  </article>
+</BaseLayout>
