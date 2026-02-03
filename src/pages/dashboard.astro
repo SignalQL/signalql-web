@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Dashboard">
+  <div id="dashboard-root">
+    <div class="animate-pulse space-y-4">
+      <div class="h-8 bg-zinc-200 dark:bg-zinc-800 rounded w-1/4"></div>
+      <div class="h-64 bg-zinc-100 dark:bg-zinc-900 rounded-xl"></div>
+    </div>
+  </div>
+
+  <script>
+    // Client-side script to retrieve data from Go API
+    async function loadSignals() {
+      const root = document.getElementById('dashboard-root');
+      try {
+        const response = await fetch('https://api.signalql.io/v1/signals', { 
+          credentials: 'include' // Include cookies in the request
+        });
+
+        if (response.status === 401) {
+          window.location.href = '/login'; // Redirect if not logged in
+          return;
+        }
+
+        const data = await response.json();
+        
+        // Render data
+        root.innerHTML = `
+          <h1 class="font-mono text-2xl mb-6">Security Signals (${data.length})</h1>
+          <div class="grid gap-4">
+            ${data.map(s => `
+              <div class="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg font-mono text-sm">
+                <span class="text-blue-500">[${s.source}]</span> ${s.title}
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (e) {
+        root.innerHTML = '<p class="text-red-500">Failed to load signals</p>';
+      }
+    }
+
+    loadSignals();
+  </script>
+</BaseLayout>

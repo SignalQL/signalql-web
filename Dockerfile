@@ -1,3 +1,5 @@
+# Keep this Dockerfile for SSR hosting, 
+# The project use Firebase based hosting for static hosting
 FROM node:lts-slim AS runtime
 WORKDIR /app
 
