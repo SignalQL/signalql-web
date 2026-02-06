@@ -1,16 +1,16 @@
 ---
 // src/pages/index.astro
-import BaseLayout from '../layouts/BaseLayout.astro';
+import Layout from '../layouts/Layout.astro';
 import { getEntry } from 'astro:content';
 
 const page = await getEntry('pages', 'home');
 const { Content } = await page.render();
 ---
 
-<BaseLayout ...>
+<Layout ...>
   <article class="prose prose-zinc dark:prose-invert 
     prose-h1:font-mono prose-h1:tracking-tighter 
     max-w-none">
     <Content />
   </article>
-</BaseLayout>
+</Layout>

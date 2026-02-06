@@ -1,57 +1,139 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
+import Layout from '../layouts/Layout.astro';
 ---
 
-<BaseLayout title="Installation Successful">
+<Layout title="Setting up your organization">
   <main class="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-white">
     <div class="max-w-md w-full p-8 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
-      <div class="flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-        </svg>
+      
+      <div id="status-icon" class="flex items-center justify-center w-16 h-16 bg-blue-500/20 rounded-full mb-6 mx-auto">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
       
-      <h1 class="text-2xl font-bold text-center mb-2">GitHub App Installed!</h1>
-      <p class="text-slate-400 text-center mb-8">
-        The application was successfully linked to your organization.
+      <h1 id="status-title" class="text-2xl font-bold text-center mb-2">Syncing Repositories...</h1>
+      <p id="status-text" class="text-slate-400 text-center mb-8">
+        We are fetching your repositories from GitHub. This won't take long.
       </p>
 
       <div class="space-y-4">
         <div class="p-4 bg-slate-950 rounded-lg border border-slate-800">
           <label class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Internal Org ID</label>
           <div id="org-id-display" class="font-mono text-sm text-blue-400 mt-1 break-all">
-            Loading...
+            ...
           </div>
         </div>
 
-        <a 
-          href="/dashboard" 
-          class="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-center font-medium rounded-lg transition-colors"
-        >
-          Go to Dashboard
-        </a>
+        <div class="pt-6"> 
+          <a 
+            id="dashboard-button"
+            href="/dashboard" 
+            class="hidden w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-center font-medium rounded-lg transition-all transform scale-95 opacity-0 shadow-lg shadow-blue-500/20"
+          >
+            Open Dashboard
+          </a>
+        </div>
       </div>
-    </div>
   </main>
-</BaseLayout>
+</Layout>
 
 <script>
-  // Этот скрипт выполняется в браузере
-  function displayOrgId() {
+  async function pollSyncStatus() {
     const params = new URLSearchParams(window.location.search);
     const orgId = params.get('org_id');
     const displayElement = document.getElementById('org-id-display');
+    const statusTitle = document.getElementById('status-title');
+    const statusText = document.getElementById('status-text');
+    const statusIcon = document.getElementById('status-icon');
+    const dashboardBtn = document.getElementById('dashboard-button');
+    const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
 
-    if (displayElement) {
-      if (orgId) {
-        displayElement.textContent = orgId;
-      } else {
-        displayElement.textContent = 'Not found in URL';
-        displayElement.classList.replace('text-blue-400', 'text-red-400');
-      }
+    if (!orgId) {
+      if (displayElement) displayElement.textContent = 'Org ID missing';
+      return;
     }
+
+    displayElement.textContent = orgId;
+
+    let attempts = 0;
+    const maxAttempts = 20; // 20 раз по 2 секунды = 40 секунд
+
+    // Polling interval
+    const interval = setInterval(async () => {
+        attempts++;
+      try {
+        const url = `${API_BASE_URL}/api/organizations/${orgId}`;
+        console.log( 'Polling org status',  url);
+        const response = await fetch(url, {
+            headers: {
+                'ngrok-skip-browser-warning': 'true' // Пропускает страницу-заглушку ngrok
+            }
+        });
+        if (!response.ok) throw new Error('Failed to fetch');
+        
+        // Parse the JSON response
+        console.log(response);
+        const data = await response.json();
+
+        // Проверяем статус из твоей БД
+        if (data.status === 'pending') {
+          clearInterval(interval);
+          
+          // Update UI to "Success"
+          statusTitle.textContent = "In Progress!";
+          statusText.textContent = `In Progress. We are fetching your repositories from GitHub. This won't take long.`;
+          statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+          statusIcon.className = "flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto";
+          
+          // Show the button
+          dashboardBtn.classList.remove('hidden');
+          setTimeout(() => {
+            dashboardBtn.classList.add('scale-100', 'opacity-100');
+          }, 50);
+        }
+
+        if (data.status === 'completed') {
+          clearInterval(interval);
+          
+          // Update UI to "Success"
+          statusTitle.textContent = "Completed!";
+          statusText.textContent = `Successfully synced ${data.repo_count || 0} repositories.`;
+          statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+          statusIcon.className = "flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto";
+          
+          // Show the button
+          dashboardBtn.classList.remove('hidden');
+          setTimeout(() => {
+            dashboardBtn.classList.add('scale-100', 'opacity-100');
+          }, 50);
+        }
+        
+        if (data.status === 'failed') {
+          clearInterval(interval);
+          statusTitle.textContent = "Sync Failed";
+          statusText.textContent = "Something went wrong during repository synchronization.";
+          statusIcon.innerHTML = `<span class="text-red-500 text-2xl">⚠️</span>`;
+        }
+
+        // Проверка на лимит попыток
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          statusTitle.textContent = "Sync taking too long";
+          statusText.textContent = "We're still working on it, but you can check back later in the dashboard.";
+          statusIcon.innerHTML = `<span class="text-yellow-500 text-3xl">⏳</span>`;
+          
+          // Всё равно покажем кнопку, чтобы пользователь не "застрял"
+          dashboardBtn.classList.remove('hidden');
+          dashboardBtn.classList.add('scale-100', 'opacity-100');
+          dashboardBtn.textContent = "Go to Dashboard anyway";
+        }
+
+      } catch (err) {
+        console.error("Polling error:", err);
+        console.error("Error Message:", err.message);
+        // Don't clear the interval, it may simply restart itself
+      }
+    }, 2000); // Poll every 2 seconds
   }
 
-  // Запускаем при загрузке
-  displayOrgId();
+  pollSyncStatus();
 </script>
