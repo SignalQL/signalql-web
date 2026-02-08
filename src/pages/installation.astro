@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Setting up your organization">
-  <main class="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-white">
+  <main class="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-white p-4">
     <div class="max-w-md w-full p-8 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl">
       
       <div id="status-icon" class="flex items-center justify-center w-16 h-16 bg-blue-500/20 rounded-full mb-6 mx-auto">
@@ -23,7 +23,7 @@ import Layout from '../layouts/Layout.astro';
           </div>
         </div>
 
-        <div class="pt-6"> 
+        <div class="pt-6 flex flex-col items-center gap-3 w-full"> 
           <a 
             id="dashboard-button"
             href="/dashboard" 
@@ -31,12 +31,26 @@ import Layout from '../layouts/Layout.astro';
           >
             Open Dashboard
           </a>
+
+          <button 
+            id="refresh-button"
+            class="hidden text-sm text-slate-400 hover:text-white flex items-center gap-2 transition-colors py-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Try Again
+          </button>
         </div>
       </div>
+    </div>
   </main>
 </Layout>
 
 <script>
+  let pollingInterval;
+  let errorCount = 0;
+
   async function pollSyncStatus() {
     const params = new URLSearchParams(window.location.search);
     const orgId = params.get('org_id');
@@ -45,6 +59,7 @@ import Layout from '../layouts/Layout.astro';
     const statusText = document.getElementById('status-text');
     const statusIcon = document.getElementById('status-icon');
     const dashboardBtn = document.getElementById('dashboard-button');
+    const refreshBtn = document.getElementById('refresh-button');
     const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
 
     if (!orgId) {
@@ -54,24 +69,31 @@ import Layout from '../layouts/Layout.astro';
 
     displayElement.textContent = orgId;
 
-    let errorCount = 0;
+    // Сброс состояния при запуске
     let attempts = 0;
-    const maxAttempts = 20; 
+    const maxAttempts = 20;
+    const maxErrors = 5;
+    errorCount = 0;
+    refreshBtn.classList.add('hidden');
 
-    const interval = setInterval(async () => {
+    if (pollingInterval) clearInterval(pollingInterval);
+
+    pollingInterval = setInterval(async () => {
       attempts++;
 
-      // 1. Проверяем лимит попыток ДО запроса или гарантированно в каждом цикле
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
+      // 1. Проверка общего лимита времени
+      if (attempts > maxAttempts) {
+        clearInterval(pollingInterval);
         statusTitle.textContent = "Sync taking too long";
-        statusText.textContent = "We're still working on it, but you can check back later in the dashboard.";
+        statusText.textContent = "We're still working on it. You can try refreshing or go to the dashboard anyway.";
         statusIcon.innerHTML = `<span class="text-yellow-500 text-3xl">⏳</span>`;
+        statusIcon.className = "flex items-center justify-center w-16 h-16 bg-yellow-500/20 rounded-full mb-6 mx-auto";
         
+        refreshBtn.classList.remove('hidden');
         dashboardBtn.classList.remove('hidden');
-        dashboardBtn.classList.add('scale-100', 'opacity-100');
         dashboardBtn.textContent = "Go to Dashboard anyway";
-        return; // Выходим из текущей итерации
+        setTimeout(() => dashboardBtn.classList.add('scale-100', 'opacity-100'), 50);
+        return;
       }
 
       try {
@@ -83,43 +105,60 @@ import Layout from '../layouts/Layout.astro';
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const data = await response.json();
+        errorCount = 0; // Успешный запрос — сбрасываем ошибки
 
-        // Логика обработки статусов
         if (data.status === 'completed') {
-          clearInterval(interval);
+          clearInterval(pollingInterval);
           statusTitle.textContent = "Completed!";
           statusText.textContent = `Successfully synced ${data.repo_count || 0} repositories.`;
-          statusIcon.innerHTML = `<svg ...>...</svg>`; // твой SVG
+          statusIcon.innerHTML = `<div class="bg-green-500 rounded-full p-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>`;
           statusIcon.className = "flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto";
           
+          refreshBtn.classList.add('hidden');
           dashboardBtn.classList.remove('hidden');
+          dashboardBtn.textContent = "Open Dashboard";
           setTimeout(() => dashboardBtn.classList.add('scale-100', 'opacity-100'), 50);
         }
         
         if (data.status === 'failed') {
-          clearInterval(interval);
+          clearInterval(pollingInterval);
           statusTitle.textContent = "Sync Failed";
-          statusText.textContent = data.sync_error || "Something went wrong.";
-          statusIcon.innerHTML = `<span class="text-red-500 text-2xl">⚠️</span>`;
+          statusText.textContent = data.sync_error || "Something went wrong during synchronization.";
+          statusIcon.innerHTML = `<span class="text-red-500 text-3xl">⚠️</span>`;
+          statusIcon.className = "flex items-center justify-center w-16 h-16 bg-red-500/20 rounded-full mb-6 mx-auto";
+          refreshBtn.classList.remove('hidden');
         }
-
-        // If the status is 'pending' or 'in_progress', do nothing, wait for the next iteration
-        console.log("Trying #", attempts);
-
+        console.log("attempts", attempts);
       } catch (err) {
-        console.error("Polling attempt failed:", attempts, err);
-        // Check if we've reached the maximum number of attempts
-        if (errorCount >= maxAttempts) {
-          clearInterval(interval);
-          statusTitle.textContent = "Too many errors";
-          statusText.textContent = "We've tried too many times. Please try again later.";
-          statusIcon.innerHTML = `<span class="text-red-500 text-2xl">⚠️</span>`;
-          return;
-        }
         errorCount++;
+        console.error(`Attempt ${attempts} failed:`, err);
+
+        if (errorCount >= maxErrors) {
+          clearInterval(pollingInterval);
+          statusTitle.textContent = "Connection Error";
+          statusText.textContent = "We're having trouble reaching the server. Please check your connection.";
+          statusIcon.innerHTML = `<span class="text-red-500 text-3xl">📡</span>`;
+          statusIcon.className = "flex items-center justify-center w-16 h-16 bg-red-500/20 rounded-full mb-6 mx-auto";
+          refreshBtn.classList.remove('hidden');
+        }
       }
-    }, 2000); 
+    }, 2000);
   }
 
+  // Обработчик кнопки Refresh
+  document.getElementById('refresh-button')?.addEventListener('click', () => {
+    const statusIcon = document.getElementById('status-icon');
+    const statusTitle = document.getElementById('status-title');
+    const statusText = document.getElementById('status-text');
+    
+    statusIcon.innerHTML = '<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>';
+    statusIcon.className = "flex items-center justify-center w-16 h-16 bg-blue-500/20 rounded-full mb-6 mx-auto";
+    statusTitle.textContent = "Retrying sync...";
+    statusText.textContent = "Checking the status again...";
+    
+    pollSyncStatus();
+  });
+
+  // Запуск при загрузке
   pollSyncStatus();
 </script>
