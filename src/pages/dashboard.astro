@@ -1,47 +1,87 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
 ---
 
-<Layout title="Dashboard">
-  <div id="dashboard-root">
-    <div class="animate-pulse space-y-4">
-      <div class="h-8 bg-zinc-200 dark:bg-zinc-800 rounded w-1/4"></div>
-      <div class="h-64 bg-zinc-100 dark:bg-zinc-900 rounded-xl"></div>
+<Layout title="Your Repositories">
+  <main class="p-8 max-w-7xl mx-auto text-white">
+    <header class="mb-10 flex justify-between items-end">
+      <div>
+        <h1 class="text-3xl font-bold mb-2">Connected Repositories</h1>
+        <p class="text-slate-400">Manage security monitoring for your GitHub projects.</p>
+      </div>
+      <div id="repo-count" class="text-sm font-medium text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+        Loading...
+      </div>
+    </header>
+
+    <div id="loading-state" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {[1, 2, 3, 4, 5, 6].map((_) => (
+        <div class="h-40 bg-slate-900/50 border border-slate-800 rounded-xl animate-pulse"></div>
+      ))}
     </div>
-  </div>
 
-  <script>
-    // Client-side script to retrieve data from Go API
-    async function loadSignals() {
-      const root = document.getElementById('dashboard-root');
-      try {
-        const response = await fetch('https://api.signalql.io/v1/signals', { 
-          credentials: 'include' // Include cookies in the request
-        });
+    <div id="repos-grid" class="hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      </div>
 
-        if (response.status === 401) {
-          window.location.href = '/login'; // Redirect if not logged in
-          return;
-        }
+    <div id="empty-state" class="hidden flex flex-col items-center justify-center py-20 text-center">
+      <div class="bg-slate-900 p-6 rounded-full mb-4 border border-slate-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+        </svg>
+      </div>
+      <h2 class="text-xl font-semibold mb-1">No repositories found</h2>
+      <p class="text-slate-500">Wait a moment for the sync to finish or check your installation.</p>
+    </div>
+  </main>
+</Layout>
 
-        const data = await response.json();
-        
-        // Render data
-        root.innerHTML = `
-          <h1 class="font-mono text-2xl mb-6">Security Signals (${data.length})</h1>
-          <div class="grid gap-4">
-            ${data.map(s => `
-              <div class="p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg font-mono text-sm">
-                <span class="text-blue-500">[${s.source}]</span> ${s.title}
-              </div>
-            `).join('')}
-          </div>
-        `;
-      } catch (e) {
-        root.innerHTML = '<p class="text-red-500">Failed to load signals</p>';
-      }
+<script>
+  // Импортируем функцию рендеринга (мы создадим её ниже, чтобы не дублировать HTML)
+  import { renderRepositoryCard } from '../utils/renderRepo';
+
+  async function fetchRepositories() {
+    const params = new URLSearchParams(window.location.search);
+    const orgId = params.get('org_id');
+    const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
+
+    const grid = document.getElementById('repos-grid');
+    const loading = document.getElementById('loading-state');
+    const empty = document.getElementById('empty-state');
+    const countDisplay = document.getElementById('repo-count');
+
+    if (!orgId) {
+      console.error('No organization ID provided');
+      return;
     }
 
-    loadSignals();
-  </script>
-</Layout>
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/repositories?size=100`, {
+         headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch repositories');
+      
+      const repos = await response.json();
+
+      loading.classList.add('hidden');
+
+      if (!repos || repos.length === 0) {
+        empty.classList.remove('hidden');
+        countDisplay.textContent = '0 repos';
+        return;
+      }
+
+      // Отрисовываем карточки
+      grid.innerHTML = repos.map(repo => renderRepositoryCard(repo)).join('');
+      grid.classList.remove('hidden');
+      countDisplay.textContent = `${repos.length} repositories`;
+
+    } catch (err) {
+      console.error('Error loading dashboard:', err);
+      loading.innerHTML = `<p class="text-red-400 col-span-full text-center">Failed to load data. Please refresh.</p>`;
+    }
+  }
+
+  fetchRepositories();
+</script>
