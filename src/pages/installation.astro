@@ -54,85 +54,71 @@ import Layout from '../layouts/Layout.astro';
 
     displayElement.textContent = orgId;
 
+    let errorCount = 0;
     let attempts = 0;
-    const maxAttempts = 20; // 20 раз по 2 секунды = 40 секунд
+    const maxAttempts = 20; 
 
-    // Polling interval
     const interval = setInterval(async () => {
-        attempts++;
+      attempts++;
+
+      // 1. Проверяем лимит попыток ДО запроса или гарантированно в каждом цикле
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        statusTitle.textContent = "Sync taking too long";
+        statusText.textContent = "We're still working on it, but you can check back later in the dashboard.";
+        statusIcon.innerHTML = `<span class="text-yellow-500 text-3xl">⏳</span>`;
+        
+        dashboardBtn.classList.remove('hidden');
+        dashboardBtn.classList.add('scale-100', 'opacity-100');
+        dashboardBtn.textContent = "Go to Dashboard anyway";
+        return; // Выходим из текущей итерации
+      }
+
       try {
         const url = `${API_BASE_URL}/api/organizations/${orgId}`;
-        console.log( 'Polling org status',  url);
         const response = await fetch(url, {
-            headers: {
-                'ngrok-skip-browser-warning': 'true' // Пропускает страницу-заглушку ngrok
-            }
+            headers: { 'ngrok-skip-browser-warning': 'true' }
         });
-        if (!response.ok) throw new Error('Failed to fetch');
         
-        // Parse the JSON response
-        console.log(response);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
         const data = await response.json();
 
-        // Проверяем статус из твоей БД
-        if (data.status === 'pending') {
-          clearInterval(interval);
-          
-          // Update UI to "Success"
-          statusTitle.textContent = "In Progress!";
-          statusText.textContent = `In Progress. We are fetching your repositories from GitHub. This won't take long.`;
-          statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
-          statusIcon.className = "flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto";
-          
-          // Show the button
-          dashboardBtn.classList.remove('hidden');
-          setTimeout(() => {
-            dashboardBtn.classList.add('scale-100', 'opacity-100');
-          }, 50);
-        }
-
+        // Логика обработки статусов
         if (data.status === 'completed') {
           clearInterval(interval);
-          
-          // Update UI to "Success"
           statusTitle.textContent = "Completed!";
           statusText.textContent = `Successfully synced ${data.repo_count || 0} repositories.`;
-          statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>`;
+          statusIcon.innerHTML = `<svg ...>...</svg>`; // твой SVG
           statusIcon.className = "flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full mb-6 mx-auto";
           
-          // Show the button
           dashboardBtn.classList.remove('hidden');
-          setTimeout(() => {
-            dashboardBtn.classList.add('scale-100', 'opacity-100');
-          }, 50);
+          setTimeout(() => dashboardBtn.classList.add('scale-100', 'opacity-100'), 50);
         }
         
         if (data.status === 'failed') {
           clearInterval(interval);
           statusTitle.textContent = "Sync Failed";
-          statusText.textContent = "Something went wrong during repository synchronization.";
+          statusText.textContent = data.sync_error || "Something went wrong.";
           statusIcon.innerHTML = `<span class="text-red-500 text-2xl">⚠️</span>`;
         }
 
-        // Проверка на лимит попыток
-        if (attempts >= maxAttempts) {
-          clearInterval(interval);
-          statusTitle.textContent = "Sync taking too long";
-          statusText.textContent = "We're still working on it, but you can check back later in the dashboard.";
-          statusIcon.innerHTML = `<span class="text-yellow-500 text-3xl">⏳</span>`;
-          
-          // Всё равно покажем кнопку, чтобы пользователь не "застрял"
-          dashboardBtn.classList.remove('hidden');
-          dashboardBtn.classList.add('scale-100', 'opacity-100');
-          dashboardBtn.textContent = "Go to Dashboard anyway";
-        }
+        // If the status is 'pending' or 'in_progress', do nothing, wait for the next iteration
+        console.log("Trying #", attempts);
 
       } catch (err) {
-        console.error("Polling error:", err);
-        console.error("Error Message:", err.message);
-        // Don't clear the interval, it may simply restart itself
+        console.error("Polling attempt failed:", attempts, err);
+        // Check if we've reached the maximum number of attempts
+        if (errorCount >= maxAttempts) {
+          clearInterval(interval);
+          statusTitle.textContent = "Too many errors";
+          statusText.textContent = "We've tried too many times. Please try again later.";
+          statusIcon.innerHTML = `<span class="text-red-500 text-2xl">⚠️</span>`;
+          return;
+        }
+        errorCount++;
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000); 
   }
 
   pollSyncStatus();
