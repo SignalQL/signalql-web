@@ -12,26 +12,20 @@ export function renderSignalRow(signal) {
     day: 'numeric'
   });
 
-  return `
-    <tr class="border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
-      <td class="py-4 px-4">
-        <span class="text-[10px] font-bold px-2 py-1 rounded border ${severityColors[signal.severity] || severityColors.INFO}">
-          ${signal.severity}
-        </span>
-      </td>
-      <td class="py-4 px-4">
-        <div class="flex flex-col">
-          <span class="text-sm font-semibold text-slate-100">${signal.title}</span>
-          <span class="text-xs text-slate-500 font-mono truncate max-w-xs">${signal.file_path || 'Multiple files'}:${signal.line_start || ''}</span>
+ // Добавь это в шаблон строки внутри <td> с описанием или отдельной колонкой
+return `
+  <tr class="border-b border-slate-900 hover:bg-slate-900/30 transition-colors font-mono">
+    <td class="py-3 px-4 uppercase text-[9px]">...</td>
+    <td class="py-3 px-4">
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2 mb-0.5">
+            <span class="text-[9px] text-blue-500 font-bold bg-blue-500/5 px-1 border border-blue-500/20">${signal.repo_name}</span>
+            <span class="text-xs font-bold text-slate-200 uppercase tracking-tight">${signal.title}</span>
         </div>
-      </td>
-      <td class="py-4 px-4 text-xs text-slate-400">
-        <span class="bg-slate-900 px-2 py-1 rounded border border-slate-700">${signal.signal_type}</span>
-      </td>
-      <td class="py-4 px-4 text-xs text-slate-300">${date}</td>
-      <td class="py-4 px-4 text-right">
-        <button class="text-slate-500 hover:text-white transition-colors">View Details</button>
-      </td>
-    </tr>
-  `;
+        <span class="text-[10px] text-slate-600 truncate max-w-md">${signal.file_path || 'system'} : L${signal.line_start || '0'}</span>
+      </div>
+    </td>
+    ...
+  </tr>
+`;
 }
