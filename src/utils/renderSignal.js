@@ -34,9 +34,9 @@ export function renderSignalRow(signal) {
         <div class="flex flex-col">
           <div class="flex items-center gap-2 mb-0.5">
               <span class="text-[9px] text-blue-500 font-bold bg-blue-500/5 px-1 border border-blue-500/20">
-                ${signal.repository_id || 'repo'}
+                ${signal.repository_name || 'repo'}
               </span>
-              <span class="text-xs font-bold text-slate-200 uppercase tracking-tight">
+              <span class="text-xs font-bold text-slate-200  tracking-tight">
                 ${signal.title}
               </span>
           </div>
