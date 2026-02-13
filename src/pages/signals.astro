@@ -84,9 +84,8 @@ import Layout from '../layouts/Layout.astro';
             </div>
         </div>
 
-        <div class="p-6 border-t border-slate-900 flex justify-end gap-3 bg-slate-900/20">
-          <button class="px-4 py-2 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white rounded transition-all">Resolve</button>
-          <button class="px-4 py-2 text-[10px] font-bold uppercase border border-slate-800 text-slate-400 hover:bg-slate-900 rounded transition-all">Dismiss</button>
+        <div class="p-6 border-t border-slate-900 flex justify-end gap-3 bg-slate-900/20">              
+          <button id="cancel-dialog" class="px-4 py-2 text-[10px] font-bold uppercase border border-slate-800 text-slate-400 hover:bg-slate-900 rounded transition-all">Close</button>
         </div>
       </div>
     </dialog>
@@ -224,6 +223,7 @@ import Layout from '../layouts/Layout.astro';
     }
   };
   document.getElementById('close-dialog')?.addEventListener('click', () => dialog.close());
+  document.getElementById('cancel-dialog')?.addEventListener('click', () => dialog.close());
 
   // Закрытие при клике на оверлей (снаружи)
   dialog.addEventListener('click', (e) => {
