@@ -70,17 +70,165 @@ import Layout from '../layouts/Layout.astro';
         <p class="text-xs uppercase tracking-widest text-slate-600 font-mono">// NO THREATS DETECTED</p>
       </div>
     </div>
+
+    <dialog id="signal-dialog" class="bg-transparent backdrop:bg-slate-950/80 p-0 m-auto w-full max-w-3xl border-none outline-none">
+      <div class="bg-slate-950 border border-slate-800 rounded-xl shadow-2xl p-0 overflow-hidden font-mono">
+        <div class="p-6 border-b border-slate-900 flex justify-between items-start">
+          <div id="dialog-header-content">
+            </div>
+          <button id="close-dialog" class="text-slate-500 hover:text-white transition-colors text-2xl">&times;</button>
+        </div>
+
+        <div class="p-8 max-h-[70vh] overflow-y-auto">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8" id="dialog-body-content">
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-slate-900 flex justify-end gap-3 bg-slate-900/20">
+          <button class="px-4 py-2 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white rounded transition-all">Resolve</button>
+          <button class="px-4 py-2 text-[10px] font-bold uppercase border border-slate-800 text-slate-400 hover:bg-slate-900 rounded transition-all">Dismiss</button>
+        </div>
+      </div>
+    </dialog>
+
   </main>
 </Layout>
 
 <script>
   import { renderSignalRow } from '../utils/renderSignal';
+  import { SeverityColors } from '../utils/constants';
+
 
   let allSignals = [];
   const searchInput = document.getElementById('signal-search');
   const tbody = document.getElementById('signals-table-body');
   const loader = document.getElementById('table-loader');
   const emptyState = document.getElementById('empty-state');
+  const dialog = document.getElementById('signal-dialog');
+  const headerContent = document.getElementById('dialog-header-content');
+  const bodyContent = document.getElementById('dialog-body-content');
+
+// Делаем функцию доступной глобально
+  window.openSignalDetails = async (id) => {    
+    const signal = allSignals.find(s => s.id === id);
+    if (!signal) return;
+
+    const sev = (signal.severity || 'INFO').toUpperCase();
+    const colorClass = SeverityColors[sev] || SeverityColors.INFO;
+
+    // 1. Наполняем Header (сразу)
+    headerContent.innerHTML = `
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${colorClass} uppercase tracking-widest">${signal.severity}</span>
+        <span class="text-[9px] text-slate-600">ID: ${signal.id}</span>
+      </div>
+      <h2 class="text-xl font-bold text-slate-100 tracking-tight">${signal.title}</h2>
+    `;
+
+    // 2. Наполняем Body (с плейсхолдером для таймлайна)
+    bodyContent.innerHTML = `
+      <div class="col-span-1 space-y-6">
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Location</h3>
+          <p class="text-xs text-slate-300 bg-slate-900 p-2 rounded border border-slate-800 truncate">${signal.file_path}:L${signal.line_start}</p>
+        </div>
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Details</h3>
+          <div class="bg-slate-900/50 p-3 rounded border border-slate-800 space-y-2">
+              <div class="flex justify-between text-[10px]">
+                  <span class="text-slate-500 uppercase">Provider</span>
+                  <span class="text-slate-200">${signal.provider}</span>
+              </div>
+              <div class="flex justify-between text-[10px]">
+                  <span class="text-slate-500 uppercase">Scanner</span>
+                  <span class="text-slate-200">${signal.signal_type}</span>
+              </div>
+              <div class="flex justify-between text-[10px]">
+                  <span class="text-slate-500 uppercase">External URL</span>
+                  <a href="${signal.html_url}" target="_blank" class="text-blue-500 hover:text-blue-400 font-bold">GITHUB ↗</a>
+              </div>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Metadata</h3>
+          <pre class="text-[9px] text-blue-400/80 bg-slate-900/50 p-3 rounded border border-slate-800 max-h-[150px] overflow-auto font-mono">${JSON.stringify(signal.metadata || {}, null, 2)}</pre>
+        </div>
+      </div>
+
+      <div class="col-span-1 space-y-6">
+        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Activity Timeline</h3>
+        <div id="timeline-container" class="relative border-l border-slate-800 ml-2 pl-4 space-y-6 mt-4">
+          <div class="animate-pulse flex space-x-4">
+            <div class="flex-1 space-y-4 py-1">
+              <div class="h-2 bg-slate-800 rounded w-3/4"></div>
+              <div class="space-y-2">
+                <div class="h-2 bg-slate-800 rounded"></div>
+                <div class="h-2 bg-slate-800 rounded w-5/6"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Показываем модалку до завершения сетевого запроса
+    dialog.showModal();
+
+    // 3. Подгружаем историю из API
+    try {
+      const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
+      const response = await fetch(`${API_BASE_URL}/api/signals/${id}/history`, {
+         headers: { 'ngrok-skip-browser-warning': 'true' } // Если используешь ngrok
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch history');
+      
+      const history = await response.json();
+      const timelineContainer = document.getElementById('timeline-container');
+      
+      if (!history || history.length === 0) {
+        timelineContainer.innerHTML = `<p class="text-[10px] text-slate-600 italic">No historical snapshots available.</p>`;
+        return;
+      }
+
+      // Рендерим загруженные данные
+      timelineContainer.innerHTML = history.map((item, index) => {
+        const date = new Date(item.received_at).toLocaleString('en-GB', { 
+            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+        });
+        
+        // Пытаемся достать action из payload, если он там есть
+        const actionName = item.payload?.action || (index === history.length - 1 ? 'Initial Detection' : 'Signal Updated');
+        
+        return `
+          <div class="relative group">
+            <div class="absolute -left-[21px] top-1 w-2.5 h-2.5 ${index === 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-slate-700'} rounded-full border-2 border-slate-950 transition-colors"></div>
+            <div class="flex flex-col">
+                <p class="text-[10px] text-slate-200 font-bold uppercase tracking-tight">${actionName}</p>
+                <p class="text-[9px] text-slate-500 font-mono">${date}</p>
+                <details class="mt-1">
+                    <summary class="text-[8px] text-blue-500/70 hover:text-blue-400 cursor-pointer uppercase list-none font-bold">View Payload</summary>
+                    <pre class="mt-2 text-[8px] text-slate-400 bg-black/40 p-2 rounded border border-slate-800/50 overflow-x-auto font-mono max-h-40">${JSON.stringify(item.payload, null, 2)}</pre>
+                </details>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+    } catch (err) {
+      console.error(err);
+      document.getElementById('timeline-container').innerHTML = `
+        <p class="text-[10px] text-red-500/80 bg-red-500/5 border border-red-500/20 p-2 rounded">
+          Failed to load history trail.
+        </p>`;
+    }
+  };
+  document.getElementById('close-dialog')?.addEventListener('click', () => dialog.close());
+
+  // Закрытие при клике на оверлей (снаружи)
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
 
   async function fetchSignals() {
     const params = new URLSearchParams(window.location.search);

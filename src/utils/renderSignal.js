@@ -1,14 +1,8 @@
+import { SeverityColors } from './constants';
 export function renderSignalRow(signal) {
-  const severityColors = {
-    CRITICAL: 'bg-red-500/10 text-red-500 border-red-500/20',
-    HIGH: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-    MEDIUM: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-    LOW: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-    INFO: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-  };
 
   const sev = (signal.severity || 'INFO').toUpperCase();
-  const colorClass = severityColors[sev] || severityColors.INFO;
+  const colorClass = SeverityColors[sev] || SeverityColors.INFO;
 
   let dateStr = '---';
   try {
@@ -57,11 +51,14 @@ export function renderSignalRow(signal) {
       </td>
 
       <td class="py-3 px-4 text-right">
-        <a href="/signals/${signal.id}" class="inline-block text-slate-700 hover:text-blue-500 transition-transform group-hover:translate-x-1">
+        <button 
+          onclick="window.openSignalDetails('${signal.id}')"
+          class="inline-block text-slate-700 hover:text-blue-500 transition-transform group-hover:translate-x-1"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
-        </a>
+        </button>
       </td>
     </tr>
   `;
