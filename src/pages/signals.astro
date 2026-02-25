@@ -98,13 +98,18 @@ import Layout from '../layouts/Layout.astro';
   import { renderSignalRow } from '../utils/renderSignal';
   import { SeverityColors } from '../utils/constants';
 
+  declare global {
+    interface Window {
+      openSignalDetails: (id: string) => Promise<void>;
+    }
+  }
 
   let allSignals = [];
   const searchInput = document.getElementById('signal-search');
   const tbody = document.getElementById('signals-table-body');
   const loader = document.getElementById('table-loader');
   const emptyState = document.getElementById('empty-state');
-  const dialog = document.getElementById('signal-dialog');
+  const dialog = document.getElementById('signal-dialog') as HTMLDialogElement;
   const headerContent = document.getElementById('dialog-header-content');
   const bodyContent = document.getElementById('dialog-body-content');
 
@@ -223,8 +228,8 @@ import Layout from '../layouts/Layout.astro';
         </p>`;
     }
   };
-  document.getElementById('close-dialog')?.addEventListener('click', () => dialog.close());
-  document.getElementById('cancel-dialog')?.addEventListener('click', () => dialog.close());
+  document.getElementById('close-dialog')?.addEventListener('click', () => (dialog as HTMLDialogElement).close());
+  document.getElementById('cancel-dialog')?.addEventListener('click', () => (dialog as HTMLDialogElement).close());
 
   // Закрытие при клике на оверлей (снаружи)
   dialog.addEventListener('click', (e) => {
@@ -264,7 +269,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   searchInput?.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
+    const query = (e.target as HTMLInputElement).value.toLowerCase();
     const filtered = allSignals.filter(s => 
       s.title.toLowerCase().includes(query) || 
       (s.file_path && s.file_path.toLowerCase().includes(query)) ||
@@ -274,17 +279,17 @@ import Layout from '../layouts/Layout.astro';
   });
 
   document.getElementById('btn-filter-critical')?.addEventListener('click', () => {
-    searchInput.value = 'CRITICAL';
+    (searchInput as HTMLInputElement).value = 'CRITICAL';
     searchInput.dispatchEvent(new Event('input'));
   });
 
   document.getElementById('btn-filter-high')?.addEventListener('click', () => {
-    searchInput.value = 'HIGH';
+    (searchInput as HTMLInputElement).value = 'HIGH';
     searchInput.dispatchEvent(new Event('input'));
   });
 
   document.getElementById('btn-clear')?.addEventListener('click', () => {
-    searchInput.value = '';
+    (searchInput as HTMLInputElement).value = '';
     searchInput.dispatchEvent(new Event('input'));
   });
 
