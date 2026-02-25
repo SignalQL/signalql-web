@@ -31,7 +31,14 @@ const { title, description, orgId = 'default-org' } = Astro.props;
         </div>
       </nav>
     </header>
-
+    <script>   
+    const token = localStorage.getItem('signalql_token');
+    
+    // If there is no token — immediate redirect to login
+    if (!token) {
+      window.location.href = '/login';
+    }
+    </script>
     <div class="flex flex-1">
       <aside class="w-14 md:w-56 border-r border-zinc-900 flex flex-col bg-zinc-950 transition-all duration-300">
       <nav class="flex-1 px-3 py-6 space-y-1" id="dynamic-sidebar-nav">
