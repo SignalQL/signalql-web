@@ -20,19 +20,50 @@ const { title, description, orgId = 'default-org' } = Astro.props;
         <a href={`/signals`} class="font-bold tracking-tighter text-lg flex items-center gap-2">
           <span class="w-5 h-5 bg-zinc-100 rounded-md shadow-[0_0_10px_rgba(255,255,255,0.2)]"></span>
           SignalQL
-        </a>
+        </a>        
+      <div class="flex items-center gap-4">
+        <span id="org-badge" class="text-[10px] text-zinc-600 font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 hidden sm:block uppercase">
+          ID: {orgId.substring(0,8)}
+        </span>
+        <div class="h-4 w-[1px] bg-zinc-800 mx-2"></div>
+        <a href="/docs" class="text-xs font-medium text-zinc-400 hover:text-zinc-100 transition-colors uppercase tracking-widest">Docs</a>
         
-        <div class="flex items-center gap-4">
-          <span id="org-badge" class="text-[10px] text-zinc-600 font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800 hidden sm:block">
-            ID: {orgId.substring(0,8)}
-          </span>
-          <div class="h-4 w-[1px] bg-zinc-800 mx-2"></div>
-          <a href="/docs" class="text-xs font-medium text-zinc-400 hover:text-zinc-100 transition-colors uppercase tracking-widest">Docs</a>
-          
-          <button id="user-profile-btn" class="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden transition-all hover:border-zinc-500">
+        <div class="relative inline-block text-left" id="user-menu-container">
+          <button 
+            id="user-profile-btn" 
+            class="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center overflow-hidden transition-all hover:border-zinc-500 focus:outline-none"
+          >
             <span class="text-[10px] font-bold text-zinc-400">JD</span>
           </button>
+
+          <div 
+            id="user-dropdown" 
+            class="hidden absolute right-0 mt-2 w-48 origin-top-right bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl z-[60] py-1"
+          >
+            <div class="px-4 py-2 border-b border-zinc-900 mb-1">
+              <p class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Account</p>
+              <p id="user-email-display" class="text-[11px] text-zinc-400 truncate font-mono">user@signalql.io</p>
+            </div>
+
+            <a href="/profile" class="flex items-center gap-2 px-4 py-2 text-[11px] font-bold uppercase tracking-tight text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-all">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Profile
+            </a>
+
+            <button 
+              id="btn-logout" 
+              class="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-bold uppercase tracking-tight text-red-500/80 hover:bg-red-500/5 hover:text-red-400 transition-all text-left"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign Out
+            </button>
+          </div>
         </div>
+      </div>
       </nav>
     </header>
 
@@ -142,13 +173,54 @@ const { title, description, orgId = 'default-org' } = Astro.props;
           `;
         }).join('');
       }
+      /**
+       * Manages the user dropdown menu visibility and actions
+       */
+      function setupUserMenu() {
+        const container = document.getElementById('user-menu-container');
+        const btn = document.getElementById('user-profile-btn');
+        const dropdown = document.getElementById('user-dropdown');
+        const logoutBtn = document.getElementById('btn-logout');
+
+        if (!btn || !dropdown) return;
+
+        // Toggle menu on avatar click
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dropdown.classList.toggle('hidden');
+        });
+
+        // Close menu when clicking anywhere else
+        document.addEventListener('click', (e) => {
+          if (!container.contains(e.target as Node)) {
+            dropdown.classList.add('hidden');
+          }
+        });
+
+        // Logout logic
+        logoutBtn?.addEventListener('click', () => {
+          localStorage.removeItem('signalql_token');
+          window.location.replace('/login');
+        });
+      }
+      /**
+       * Updates user information in the dropdown from context
+       */
+      function updateDropdownUserInfo(data) {
+        const emailDisplay = document.getElementById('user-email-display');
+        if (emailDisplay && data.user?.email) {
+          emailDisplay.textContent = data.user.email;
+        }
+      }
 
       async function updateUI() {
         const data = await fetchUserContext();
         if (!data) return;
-
+        
+        updateDropdownUserInfo(data); // Add this call
+        
         // Обновляем аватарку
-const userBtn = document.getElementById('user-profile-btn');
+        const userBtn = document.getElementById('user-profile-btn');
         if (userBtn && data.user) {
           if (data.user.avatar_url) {
             // Просто заменяем всё внутри кнопки на картинку
@@ -167,14 +239,18 @@ const userBtn = document.getElementById('user-profile-btn');
         }
       }
 
+
+
       // Инициализация
       renderSidebar();
       updateUI();
+      setupUserMenu();
 
       // Поддержка View Transitions
       document.addEventListener('astro:after-swap', () => {
         renderSidebar();
         updateUI();
+        setupUserMenu();        
       });
     </script>
   </body>
