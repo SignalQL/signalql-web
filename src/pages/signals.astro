@@ -53,9 +53,9 @@ import Layout from '../layouts/Layout.astro';
 
       <div class="flex flex-wrap gap-x-4 gap-y-2 px-1">
         <span class="text-[9px] text-slate-600 font-mono uppercase tracking-widest">Syntax:</span>
-        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const i = document.getElementById('signal-search'); i.value += 'repo:'; i.focus()">repo:name</button>
-        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const i = document.getElementById('signal-search'); i.value += 'severity:critical '; i.focus()">severity:critical</button>
-        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const i = document.getElementById('signal-search'); i.value += 'status:open '; i.focus()">status:open</button>
+        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const repo = document.getElementById('signal-search'); i.value += 'repo:'; repo.focus()">repo:name</button>
+        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const sev = document.getElementById('signal-search'); i.value += 'severity:critical '; sev.focus()">severity:critical</button>
+        <button class="text-[9px] text-slate-500 hover:text-blue-400 font-mono" onclick="const st = document.getElementById('signal-search'); i.value += 'status:open '; st.focus()">status:open</button>
       </div>
     </div>
 
@@ -112,11 +112,18 @@ import Layout from '../layouts/Layout.astro';
   import { renderSignalRow } from '../utils/renderSignal';
   import { SeverityColors } from '../utils/constants';
 
-  // Состояние
+  // Declare global function on Window interface
+  declare global {
+    interface Window {
+      openSignalDetails: (id: string) => Promise<void>;
+    }
+  }
+
+  // State
   let allSignals = [];
   const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8080';
 
-  // Элементы UI
+  // UI Elements
   const ui = {
     tbody: document.getElementById('signals-table-body'),
     loader: document.getElementById('table-loader'),
@@ -127,9 +134,10 @@ import Layout from '../layouts/Layout.astro';
     dialog: document.getElementById('signal-dialog') as HTMLDialogElement,
     headerContent: document.getElementById('dialog-header-content'),
     bodyContent: document.getElementById('dialog-body-content'),
+    signalSearch: document.getElementById('signal-search')
   };
 
-  // Универсальный fetch с авторизацией
+  // Universal fetch with authorization
   async function secureFetch(endpoint) {
     const token = localStorage.getItem('signalql_token');
     const res = await fetch(`${API_URL}${endpoint}`, {
@@ -143,23 +151,33 @@ import Layout from '../layouts/Layout.astro';
     return res.json();
   }
 
-  // Загрузка данных
-  // Измени функцию загрузки, чтобы она принимала строку поиска
-  async function initSignals(query = '') {
+  // Data loading
+  // Data loading logic
+  async function initSignals(manualQuery = null) {
     const params = new URLSearchParams(window.location.search);
     const orgId = params.get('org_id');
     
+    // 1. Check if we have a query from the URL (on first load) or from manual input
+    const urlSearch = params.get('search');
+    const query = manualQuery !== null ? manualQuery : (urlSearch || '');
+
     if (!orgId) return;
 
-    // Показываем лоадер перед запросом
+    // 2. Sync the UI input field with the query being searched
+    if (ui.searchInput) {
+      ui.searchInput.value = query;
+    }
+
+    // Show loader
     ui.loader.classList.remove('hidden');
     ui.tbody.innerHTML = '';
 
     try {
-      // Формируем URL с учетом поиска
+      // 3. Build API endpoint
       let endpoint = `/api/organizations/${orgId}/signals`;
       if (query) {
-        endpoint += `?search_query=${encodeURIComponent(query)}`;
+        // We use query here, which is either from URL or manual Search click
+        endpoint += `?search_query=${encodeURIComponent(query.toLowerCase())}`;
       }
 
       allSignals = await secureFetch(endpoint);
@@ -169,28 +187,26 @@ import Layout from '../layouts/Layout.astro';
     }
   }
 
-  // Находим новую кнопку поиска
+  // Find the new search button
   const btnSearch = document.getElementById('btn-search-execute');
 
-  // Слушатель для кнопки Search
+  // Listener for Search button
   btnSearch?.addEventListener('click', () => {
     initSignals(ui.searchInput.value);
   });
 
-  // Слушатель для Enter в поле ввода
+  // Listener for Enter in input field
   ui.searchInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       initSignals(ui.searchInput.value);
     }
   });
 
-  // Обновляем Reset
+  // Update Reset
   document.getElementById('btn-clear')?.addEventListener('click', () => {
     ui.searchInput.value = '';
     initSignals('');
   });
-
-
 
   function renderTable(data) {
     ui.loader.classList.add('hidden');
@@ -205,16 +221,16 @@ import Layout from '../layouts/Layout.astro';
     ui.criticalCount.textContent = data.filter(s => s.severity === 'CRITICAL').length;
   }
 
-  // Глобальная функция для деталей (вызывается из renderSignalRow)
+  // Global function for details (called from renderSignalRow)
 window.openSignalDetails = async (id) => {
     const signal = allSignals.find(s => s.id === id);
     if (!signal) return;
 
-    // 1. Сначала отрисовываем статику (заголовок и инфу об алерте)
+    // 1. First render static content (header and alert info)
     renderDialogStatic(signal);
     ui.dialog.showModal();
 
-    // 2. Очищаем контейнер таймлайна и ставим лоадер
+    // 2. Clear timeline container and set loader
     const container = document.getElementById('timeline-container');
     if (container) {
       container.innerHTML = `
@@ -224,10 +240,10 @@ window.openSignalDetails = async (id) => {
     }
 
     try {
-      // ВАЖНО: Проверь путь! Если в API_URL уже есть /api, то пиши просто /signals/...
+      // IMPORTANT: Check path! If API_URL already has /api, just write /signals/...
       const history = await secureFetch(`/api/signals/${id}/history`);
       
-      console.log("DEBUG: History received:", history); // Посмотри в консоль F12
+      console.log("DEBUG: History received:", history); // Check F12 console
       
       renderTimeline(history);
     } catch (e) {
@@ -238,12 +254,12 @@ window.openSignalDetails = async (id) => {
     }
   };
 
-  // Вспомогательные функции рендеринга модалки
+  // Helper functions for modal rendering
   function renderDialogStatic(signal) {
     const sev = (signal.severity || 'INFO').toUpperCase();
     const colorClass = SeverityColors[sev] || SeverityColors.INFO;
 
-    // 1. Заголовок
+    // 1. Header
     ui.headerContent.innerHTML = `
       <div class="flex items-center gap-3 mb-2">
         <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${colorClass} uppercase tracking-widest">${sev}</span>
@@ -252,7 +268,7 @@ window.openSignalDetails = async (id) => {
       <h2 class="text-xl font-bold text-slate-100 tracking-tight">${signal.title}</h2>
     `;
 
-    // 2. Тело (Каркас)
+    // 2. Body (Skeleton)
     ui.bodyContent.innerHTML = `
       <div class="col-span-1 space-y-6">
         <div>
@@ -297,8 +313,8 @@ function renderTimeline(history) {
     }
 
     container.innerHTML = history.map((item, index) => {
-      // 1. Извлекаем дату (в твоем JSON это "received_at")
-      // Если по какой-то причине его нет, используем текущую дату как фоллбек
+      // 1. Extract date (in your JSON it is "received_at")
+      // If for some reason it's missing, use current date as fallback
       const dateStr = item.received_at; 
       const date = dateStr 
         ? new Date(dateStr).toLocaleString('en-GB', { 
@@ -306,12 +322,12 @@ function renderTimeline(history) {
           })
         : 'Unknown date';
       
-      // 2. Извлекаем действие из payload. В твоем JSON это payload.action
-      // Например: "updated_assignment"
+      // 2. Extract action from payload. In your JSON it is payload.action
+      // Example: "updated_assignment"
       const actionRaw = item.payload?.action || 'Signal Activity';
       const actionName = actionRaw.replace(/_/g, ' ').toUpperCase();
       
-      // 3. Определяем статус (опционально, если хочешь подсветить)
+      // 3. Determine status (optional, if you want to highlight)
       const isInitial = index === history.length - 1;
       
       return `
@@ -338,7 +354,7 @@ function renderTimeline(history) {
       `;
     }).join('');
   }  
-  // Фильтрация
+  // Filtering
   function handleFilter(val) {
     ui.searchInput.value = val;
     const query = val.toLowerCase();
@@ -350,12 +366,24 @@ function renderTimeline(history) {
 
   // Listeners
   ui.searchInput?.addEventListener('input', (e) => handleFilter((e.target as HTMLInputElement).value));
+
+  // Handle manual search button click
+  btnSearch?.addEventListener('click', () => {
+    initSignals(ui.searchInput.value);
+  });
+
+  // Handle Enter key in search box
+  ui.searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      initSignals(ui.searchInput.value);
+    }
+  });
   document.getElementById('btn-clear')?.addEventListener('click', () => handleFilter(''));
-  
-  // Закрытие диалога
+
+  // Close dialog
   ui.dialog?.addEventListener('click', (e) => e.target === ui.dialog && ui.dialog.close());
   document.getElementById('close-dialog')?.addEventListener('click', () => ui.dialog.close());
 
-  // Запуск
+  // Init
   initSignals();
 </script>
