@@ -1,0 +1,63 @@
+---
+// src/components/dashboard/OrgSwitcher.astro
+// В будущем сюда можно добавить проп currentOrgId
+---
+<div class="relative inline-block text-left w-full px-2 mb-4">
+  <label class="block text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-2 ml-1">
+    Organization
+  </label>
+  <select 
+    id="org-selector"
+    class="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none hover:bg-zinc-800 transition-colors cursor-pointer"
+  >
+    <option value="" disabled selected>Select organization</option>
+  </select>
+</div>
+
+<script>
+
+  function initOrgSwitcher() {
+    const selector = document.getElementById('org-selector') as HTMLSelectElement;
+    if (!selector) return;
+
+    const render = (data: any) => {
+      const orgs = data.organizations || [];
+      const params = new URLSearchParams(window.location.search);
+      let currentOrgId = params.get('org_id');
+
+      // Авто-выбор первой орги, если в URL пусто
+      if (!currentOrgId && window.location.pathname.startsWith('/signals') && orgs.length > 0) {
+        window.location.href = `${window.location.pathname}?org_id=${orgs[0].id}`;
+        return;
+      }
+
+      selector.innerHTML = orgs.map((org: any) => `
+        <option value="${org.id}" ${currentOrgId === org.id ? 'selected' : ''}>
+          ${org.display_name || org.name}
+        </option>
+      `).join('');
+    };
+
+    // Если Layout уже загрузил данные
+    if (window.__USER_CONTEXT__) {
+      render(window.__USER_CONTEXT__);
+    } else {
+      // Иначе подписываемся на событие
+      window.addEventListener('user-context-loaded', (e: any) => render(e.detail));
+    }
+
+    selector.addEventListener('change', (e) => {
+      const target = e.target as HTMLSelectElement;
+      window.location.href = `${window.location.pathname}?org_id=${target.value}`;
+    });
+  }
+
+  initOrgSwitcher();
+
+  // Инициализация
+  initOrgSwitcher();
+
+  // Для поддержки Astro View Transitions (если включены)
+  document.addEventListener('astro:after-swap', initOrgSwitcher);
+
+</script>

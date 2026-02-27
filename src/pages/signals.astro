@@ -98,35 +98,117 @@ import Layout from '../layouts/Layout.astro';
   import { renderSignalRow } from '../utils/renderSignal';
   import { SeverityColors } from '../utils/constants';
 
-
+  // Состояние
   let allSignals = [];
-  const searchInput = document.getElementById('signal-search');
-  const tbody = document.getElementById('signals-table-body');
-  const loader = document.getElementById('table-loader');
-  const emptyState = document.getElementById('empty-state');
-  const dialog = document.getElementById('signal-dialog');
-  const headerContent = document.getElementById('dialog-header-content');
-  const bodyContent = document.getElementById('dialog-body-content');
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8080';
 
-// Делаем функцию доступной глобально
-  window.openSignalDetails = async (id) => {    
+  // Элементы UI
+  const ui = {
+    tbody: document.getElementById('signals-table-body'),
+    loader: document.getElementById('table-loader'),
+    emptyState: document.getElementById('empty-state'),
+    searchInput: document.getElementById('signal-search') as HTMLInputElement,
+    totalCount: document.getElementById('total-signals'),
+    criticalCount: document.getElementById('critical-signals'),
+    dialog: document.getElementById('signal-dialog') as HTMLDialogElement,
+    headerContent: document.getElementById('dialog-header-content'),
+    bodyContent: document.getElementById('dialog-body-content'),
+  };
+
+  // Универсальный fetch с авторизацией
+  async function secureFetch(endpoint) {
+    const token = localStorage.getItem('signalql_token');
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'ngrok-skip-browser-warning': 'true'
+      }
+    });
+    if (res.status === 401) window.location.href = '/login';
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  // Загрузка данных
+  async function initSignals() {
+    const params = new URLSearchParams(window.location.search);
+    const orgId = params.get('org_id');
+    
+    if (!orgId) {
+      // Если org_id нет, ждем пока Layout/OrgSwitcher сделает редирект
+      return; 
+    }
+
+    try {
+      allSignals = await secureFetch(`/api/organizations/${orgId}/signals`);
+      renderTable(allSignals);
+    } catch (err) {
+      ui.loader.innerHTML = `<p class="text-red-500 font-mono text-[10px]">FAILED TO FETCH SIGNALS</p>`;
+    }
+  }
+
+  function renderTable(data) {
+    ui.loader.classList.add('hidden');
+    if (data.length === 0) {
+      ui.tbody.innerHTML = '';
+      ui.emptyState.classList.remove('hidden');
+    } else {
+      ui.emptyState.classList.add('hidden');
+      ui.tbody.innerHTML = data.map(s => renderSignalRow(s)).join('');
+    }
+    ui.totalCount.textContent = data.length;
+    ui.criticalCount.textContent = data.filter(s => s.severity === 'CRITICAL').length;
+  }
+
+  // Глобальная функция для деталей (вызывается из renderSignalRow)
+window.openSignalDetails = async (id) => {
     const signal = allSignals.find(s => s.id === id);
     if (!signal) return;
 
+    // 1. Сначала отрисовываем статику (заголовок и инфу об алерте)
+    renderDialogStatic(signal);
+    ui.dialog.showModal();
+
+    // 2. Очищаем контейнер таймлайна и ставим лоадер
+    const container = document.getElementById('timeline-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="animate-pulse flex space-x-2">
+          <div class="h-2 bg-zinc-800 rounded w-full"></div>
+        </div>`;
+    }
+
+    try {
+      // ВАЖНО: Проверь путь! Если в API_URL уже есть /api, то пиши просто /signals/...
+      const history = await secureFetch(`/api/signals/${id}/history`);
+      
+      console.log("DEBUG: History received:", history); // Посмотри в консоль F12
+      
+      renderTimeline(history);
+    } catch (e) {
+      console.error("History load error:", e);
+      if (container) {
+        container.innerHTML = `<p class="text-[9px] text-red-500 font-mono">ERR: FAILED TO LOAD HISTORY TRAIL</p>`;
+      }
+    }
+  };
+
+  // Вспомогательные функции рендеринга модалки
+  function renderDialogStatic(signal) {
     const sev = (signal.severity || 'INFO').toUpperCase();
     const colorClass = SeverityColors[sev] || SeverityColors.INFO;
 
-    // 1. Наполняем Header (сразу)
-    headerContent.innerHTML = `
+    // 1. Заголовок
+    ui.headerContent.innerHTML = `
       <div class="flex items-center gap-3 mb-2">
-        <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${colorClass} uppercase tracking-widest">${signal.severity}</span>
+        <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${colorClass} uppercase tracking-widest">${sev}</span>
         <span class="text-[9px] text-slate-600">ID: ${signal.id}</span>
       </div>
       <h2 class="text-xl font-bold text-slate-100 tracking-tight">${signal.title}</h2>
     `;
 
-    // 2. Наполняем Body (с плейсхолдером для таймлайна)
-    bodyContent.innerHTML = `
+    // 2. Тело (Каркас)
+    ui.bodyContent.innerHTML = `
       <div class="col-span-1 space-y-6">
         <div>
           <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Location</h3>
@@ -135,17 +217,11 @@ import Layout from '../layouts/Layout.astro';
         <div>
           <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Details</h3>
           <div class="bg-slate-900/50 p-3 rounded border border-slate-800 space-y-2">
-              <div class="flex justify-between text-[10px]">
-                  <span class="text-slate-500 uppercase">Provider</span>
-                  <span class="text-slate-200">${signal.provider}</span>
-              </div>
-              <div class="flex justify-between text-[10px]">
-                  <span class="text-slate-500 uppercase">Scanner</span>
-                  <span class="text-slate-200">${signal.signal_type}</span>
-              </div>
+              <div class="flex justify-between text-[10px]"><span class="text-slate-500 uppercase">Provider</span><span class="text-slate-200">${signal.provider}</span></div>
+              <div class="flex justify-between text-[10px]"><span class="text-slate-500 uppercase">Scanner</span><span class="text-slate-200">${signal.signal_type}</span></div>
               <div class="flex justify-between text-[10px]">
                   <span class="text-slate-500 uppercase">External URL</span>
-                  <a href="${signal.html_url}" target="_blank" class="text-blue-500 hover:text-blue-400 font-bold">GITHUB ↗</a>
+                  <a href="${signal.html_url}" target="_blank" class="text-blue-500 hover:text-blue-400 font-bold underline underline-offset-4">GITHUB ↗</a>
               </div>
           </div>
         </div>
@@ -155,138 +231,87 @@ import Layout from '../layouts/Layout.astro';
         </div>
       </div>
 
-      <div class="col-span-1 space-y-6">
+      <div class="col-span-1 space-y-4">
         <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Activity Timeline</h3>
         <div id="timeline-container" class="relative border-l border-slate-800 ml-2 pl-4 space-y-6 mt-4">
-          <div class="animate-pulse flex space-x-4">
-            <div class="flex-1 space-y-4 py-1">
-              <div class="h-2 bg-slate-800 rounded w-3/4"></div>
-              <div class="space-y-2">
-                <div class="h-2 bg-slate-800 rounded"></div>
-                <div class="h-2 bg-slate-800 rounded w-5/6"></div>
-              </div>
-            </div>
+          <div class="animate-pulse flex space-x-2">
+            <div class="h-2 bg-slate-800 rounded w-full"></div>
           </div>
         </div>
       </div>
     `;
+  }
 
-    // Показываем модалку до завершения сетевого запроса
-    dialog.showModal();
+function renderTimeline(history) {
+    const container = document.getElementById('timeline-container');
+    if (!container) return;
 
-    // 3. Подгружаем историю из API
-    try {
-      const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
-      const response = await fetch(`${API_BASE_URL}/api/signals/${id}/history`, {
-         headers: { 'ngrok-skip-browser-warning': 'true' } // Если используешь ngrok
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch history');
-      
-      const history = await response.json();
-      const timelineContainer = document.getElementById('timeline-container');
-      
-      if (!history || history.length === 0) {
-        timelineContainer.innerHTML = `<p class="text-[10px] text-slate-600 italic">No historical snapshots available.</p>`;
-        return;
-      }
+    if (!history || !Array.isArray(history) || history.length === 0) {
+      container.innerHTML = `<p class="text-[10px] text-zinc-600 italic">No activity history found for this signal.</p>`;
+      return;
+    }
 
-      // Рендерим загруженные данные
-      timelineContainer.innerHTML = history.map((item, index) => {
-        const date = new Date(item.received_at).toLocaleString('en-GB', { 
+    container.innerHTML = history.map((item, index) => {
+      // 1. Извлекаем дату (в твоем JSON это "received_at")
+      // Если по какой-то причине его нет, используем текущую дату как фоллбек
+      const dateStr = item.received_at; 
+      const date = dateStr 
+        ? new Date(dateStr).toLocaleString('en-GB', { 
             day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
-        });
-        
-        // Пытаемся достать action из payload, если он там есть
-        const actionName = item.payload?.action || (index === history.length - 1 ? 'Initial Detection' : 'Signal Updated');
-        
-        return `
-          <div class="relative group">
-            <div class="absolute -left-[21px] top-1 w-2.5 h-2.5 ${index === 0 ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-slate-700'} rounded-full border-2 border-slate-950 transition-colors"></div>
-            <div class="flex flex-col">
-                <p class="text-[10px] text-slate-200 font-bold uppercase tracking-tight">${actionName}</p>
-                <p class="text-[9px] text-slate-500 font-mono">${date}</p>
-                <details class="mt-1">
-                    <summary class="text-[8px] text-blue-500/70 hover:text-blue-400 cursor-pointer uppercase list-none font-bold">View Payload</summary>
-                    <pre class="mt-2 text-[8px] text-slate-400 bg-black/40 p-2 rounded border border-slate-800/50 overflow-x-auto font-mono max-h-40">${JSON.stringify(item.payload, null, 2)}</pre>
-                </details>
-            </div>
+          })
+        : 'Unknown date';
+      
+      // 2. Извлекаем действие из payload. В твоем JSON это payload.action
+      // Например: "updated_assignment"
+      const actionRaw = item.payload?.action || 'Signal Activity';
+      const actionName = actionRaw.replace(/_/g, ' ').toUpperCase();
+      
+      // 3. Определяем статус (опционально, если хочешь подсветить)
+      const isInitial = index === history.length - 1;
+      
+      return `
+        <div class="relative pl-6 pb-6 border-l border-zinc-800 last:pb-0">
+          <div class="absolute -left-[5.5px] top-1 w-2.5 h-2.5 ${index === 0 ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-zinc-800'} rounded-full border-2 border-zinc-950"></div>
+          
+          <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <p class="text-[10px] text-zinc-200 font-bold tracking-tight">${actionName}</p>
+                ${isInitial ? '<span class="text-[8px] bg-zinc-800 text-zinc-500 px-1 rounded">INIT</span>' : ''}
+              </div>
+              <p class="text-[9px] text-zinc-500 font-mono">${date}</p>
+              
+              <details class="mt-2 group">
+                <summary class="text-[8px] text-zinc-600 group-hover:text-blue-400 cursor-pointer list-none font-bold uppercase tracking-widest transition-colors">
+                  [+] View Data Snapshot
+                </summary>
+                <div class="mt-2 p-2 bg-black/40 rounded border border-zinc-800/50">
+                   <pre class="text-[8px] text-zinc-400 overflow-x-auto max-h-40 font-mono">${JSON.stringify(item.payload, null, 2)}</pre>
+                </div>
+              </details>
           </div>
-        `;
-      }).join('');
-
-    } catch (err) {
-      console.error(err);
-      document.getElementById('timeline-container').innerHTML = `
-        <p class="text-[10px] text-red-500/80 bg-red-500/5 border border-red-500/20 p-2 rounded">
-          Failed to load history trail.
-        </p>`;
-    }
-  };
-  document.getElementById('close-dialog')?.addEventListener('click', () => dialog.close());
-  document.getElementById('cancel-dialog')?.addEventListener('click', () => dialog.close());
-
-  // Закрытие при клике на оверлей (снаружи)
-  dialog.addEventListener('click', (e) => {
-    if (e.target === dialog) dialog.close();
-  });
-
-  async function fetchSignals() {
-    const params = new URLSearchParams(window.location.search);
-    const orgId = params.get('org_id');
-    const API_BASE_URL = import.meta.env.PUBLIC_API_URL;
-
-    if (!orgId) return;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/signals`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
-      allSignals = await res.json();
-      updateUI(allSignals);
-    } catch (err) {
-      loader.innerHTML = `<p class="text-red-900 text-[10px] font-mono uppercase font-bold">Error: Connection Refused</p>`;
-    }
-  }
-
-  function updateUI(data) {
-    loader.classList.add('hidden');
-    if (data.length === 0) {
-      tbody.innerHTML = '';
-      emptyState.classList.remove('hidden');
-    } else {
-      emptyState.classList.add('hidden');
-      tbody.innerHTML = data.map(s => renderSignalRow(s)).join('');
-    }
-    
-    document.getElementById('total-signals').textContent = data.length.toString();
-    document.getElementById('critical-signals').textContent = data.filter(s => s.severity === 'CRITICAL').length.toString();
-  }
-
-  searchInput?.addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
+        </div>
+      `;
+    }).join('');
+  }  
+  // Фильтрация
+  function handleFilter(val) {
+    ui.searchInput.value = val;
+    const query = val.toLowerCase();
     const filtered = allSignals.filter(s => 
-      s.title.toLowerCase().includes(query) || 
-      (s.file_path && s.file_path.toLowerCase().includes(query)) ||
-      s.severity.toLowerCase().includes(query)
+      s.title.toLowerCase().includes(query) || s.severity.toLowerCase().includes(query)
     );
-    updateUI(filtered);
-  });
+    renderTable(filtered);
+  }
 
-  document.getElementById('btn-filter-critical')?.addEventListener('click', () => {
-    searchInput.value = 'CRITICAL';
-    searchInput.dispatchEvent(new Event('input'));
-  });
+  // Listeners
+  ui.searchInput?.addEventListener('input', (e) => handleFilter((e.target as HTMLInputElement).value));
+  document.getElementById('btn-filter-critical')?.addEventListener('click', () => handleFilter('CRITICAL'));
+  document.getElementById('btn-clear')?.addEventListener('click', () => handleFilter(''));
+  
+  // Закрытие диалога
+  ui.dialog?.addEventListener('click', (e) => e.target === ui.dialog && ui.dialog.close());
+  document.getElementById('close-dialog')?.addEventListener('click', () => ui.dialog.close());
 
-  document.getElementById('btn-filter-high')?.addEventListener('click', () => {
-    searchInput.value = 'HIGH';
-    searchInput.dispatchEvent(new Event('input'));
-  });
-
-  document.getElementById('btn-clear')?.addEventListener('click', () => {
-    searchInput.value = '';
-    searchInput.dispatchEvent(new Event('input'));
-  });
-
-  fetchSignals();
+  // Запуск
+  initSignals();
 </script>
