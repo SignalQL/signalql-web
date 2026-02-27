@@ -148,14 +148,17 @@ const { title, description, orgId = 'default-org' } = Astro.props;
         if (!data) return;
 
         // Обновляем аватарку
-        const userBtn = document.getElementById('user-profile-btn');
-        const span = userBtn?.querySelector('span');
-        if (span && data.user) {
-           span.textContent = data.user.display_name ? data.user.display_name.substring(0,2).toUpperCase() : 'U';
-           span.classList.replace('text-zinc-400', 'text-zinc-100');
+const userBtn = document.getElementById('user-profile-btn');
+        if (userBtn && data.user) {
+          if (data.user.avatar_url) {
+            // Просто заменяем всё внутри кнопки на картинку
+            userBtn.innerHTML = `<img src="${data.user.avatar_url}" alt="Profile" class="w-full h-full object-cover" />`;
+          } else {
+            const initials = data.user.display_name ? data.user.display_name.substring(0,2).toUpperCase() : 'U';
+            userBtn.innerHTML = `<span class="text-[10px] font-bold text-zinc-100">${initials}</span>`;
+          }
         }
-
-        // Обновляем бейдж организации в хедере
+                // Обновляем бейдж организации в хедере
         const params = new URLSearchParams(window.location.search);
         const orgId = params.get('org_id');
         const orgBadge = document.getElementById('org-badge');
