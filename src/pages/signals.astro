@@ -161,46 +161,138 @@ import Layout from '../layouts/Layout.astro';
   }
 
   // Глобальная функция для деталей (вызывается из renderSignalRow)
-  window.openSignalDetails = async (id) => {
+window.openSignalDetails = async (id) => {
     const signal = allSignals.find(s => s.id === id);
     if (!signal) return;
 
+    // 1. Сначала отрисовываем статику (заголовок и инфу об алерте)
     renderDialogStatic(signal);
     ui.dialog.showModal();
 
+    // 2. Очищаем контейнер таймлайна и ставим лоадер
+    const container = document.getElementById('timeline-container');
+    if (container) {
+      container.innerHTML = `
+        <div class="animate-pulse flex space-x-2">
+          <div class="h-2 bg-zinc-800 rounded w-full"></div>
+        </div>`;
+    }
+
     try {
+      // ВАЖНО: Проверь путь! Если в API_URL уже есть /api, то пиши просто /signals/...
       const history = await secureFetch(`/api/signals/${id}/history`);
+      
+      console.log("DEBUG: History received:", history); // Посмотри в консоль F12
+      
       renderTimeline(history);
     } catch (e) {
-      document.getElementById('timeline-container').innerHTML = 'Error loading history';
+      console.error("History load error:", e);
+      if (container) {
+        container.innerHTML = `<p class="text-[9px] text-red-500 font-mono">ERR: FAILED TO LOAD HISTORY TRAIL</p>`;
+      }
     }
   };
 
   // Вспомогательные функции рендеринга модалки
   function renderDialogStatic(signal) {
     const sev = (signal.severity || 'INFO').toUpperCase();
+    const colorClass = SeverityColors[sev] || SeverityColors.INFO;
+
+    // 1. Заголовок
     ui.headerContent.innerHTML = `
       <div class="flex items-center gap-3 mb-2">
-        <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${SeverityColors[sev]} uppercase tracking-widest">${sev}</span>
-        <span class="text-[9px] text-zinc-600">ID: ${signal.id}</span>
+        <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${colorClass} uppercase tracking-widest">${sev}</span>
+        <span class="text-[9px] text-slate-600">ID: ${signal.id}</span>
       </div>
-      <h2 class="text-xl font-bold text-zinc-100 tracking-tight">${signal.title}</h2>
+      <h2 class="text-xl font-bold text-slate-100 tracking-tight">${signal.title}</h2>
     `;
-    // Тут вставляешь свой HTML для bodyContent из предыдущего примера
-  }
 
-  function renderTimeline(history) {
-    const container = document.getElementById('timeline-container');
-    if (!container || !history) return;
-    container.innerHTML = history.map((item, index) => `
-      <div class="relative pl-4 border-l border-zinc-800">
-        <div class="absolute -left-[5px] top-1 w-2 h-2 rounded-full ${index === 0 ? 'bg-blue-500' : 'bg-zinc-700'}"></div>
-        <p class="text-[10px] text-zinc-200 font-bold uppercase">${item.payload?.action || 'Detection'}</p>
-        <p class="text-[9px] text-zinc-500">${new Date(item.received_at).toLocaleString()}</p>
+    // 2. Тело (Каркас)
+    ui.bodyContent.innerHTML = `
+      <div class="col-span-1 space-y-6">
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Location</h3>
+          <p class="text-xs text-slate-300 bg-slate-900 p-2 rounded border border-slate-800 truncate">${signal.file_path}:L${signal.line_start}</p>
+        </div>
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Details</h3>
+          <div class="bg-slate-900/50 p-3 rounded border border-slate-800 space-y-2">
+              <div class="flex justify-between text-[10px]"><span class="text-slate-500 uppercase">Provider</span><span class="text-slate-200">${signal.provider}</span></div>
+              <div class="flex justify-between text-[10px]"><span class="text-slate-500 uppercase">Scanner</span><span class="text-slate-200">${signal.signal_type}</span></div>
+              <div class="flex justify-between text-[10px]">
+                  <span class="text-slate-500 uppercase">External URL</span>
+                  <a href="${signal.html_url}" target="_blank" class="text-blue-500 hover:text-blue-400 font-bold underline underline-offset-4">GITHUB ↗</a>
+              </div>
+          </div>
+        </div>
+        <div>
+          <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Metadata</h3>
+          <pre class="text-[9px] text-blue-400/80 bg-slate-900/50 p-3 rounded border border-slate-800 max-h-[150px] overflow-auto font-mono">${JSON.stringify(signal.metadata || {}, null, 2)}</pre>
+        </div>
       </div>
-    `).join('');
+
+      <div class="col-span-1 space-y-4">
+        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Activity Timeline</h3>
+        <div id="timeline-container" class="relative border-l border-slate-800 ml-2 pl-4 space-y-6 mt-4">
+          <div class="animate-pulse flex space-x-2">
+            <div class="h-2 bg-slate-800 rounded w-full"></div>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
+function renderTimeline(history) {
+    const container = document.getElementById('timeline-container');
+    if (!container) return;
+
+    if (!history || !Array.isArray(history) || history.length === 0) {
+      container.innerHTML = `<p class="text-[10px] text-zinc-600 italic">No activity history found for this signal.</p>`;
+      return;
+    }
+
+    container.innerHTML = history.map((item, index) => {
+      // 1. Извлекаем дату (в твоем JSON это "received_at")
+      // Если по какой-то причине его нет, используем текущую дату как фоллбек
+      const dateStr = item.received_at; 
+      const date = dateStr 
+        ? new Date(dateStr).toLocaleString('en-GB', { 
+            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' 
+          })
+        : 'Unknown date';
+      
+      // 2. Извлекаем действие из payload. В твоем JSON это payload.action
+      // Например: "updated_assignment"
+      const actionRaw = item.payload?.action || 'Signal Activity';
+      const actionName = actionRaw.replace(/_/g, ' ').toUpperCase();
+      
+      // 3. Определяем статус (опционально, если хочешь подсветить)
+      const isInitial = index === history.length - 1;
+      
+      return `
+        <div class="relative pl-6 pb-6 border-l border-zinc-800 last:pb-0">
+          <div class="absolute -left-[5.5px] top-1 w-2.5 h-2.5 ${index === 0 ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-zinc-800'} rounded-full border-2 border-zinc-950"></div>
+          
+          <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <p class="text-[10px] text-zinc-200 font-bold tracking-tight">${actionName}</p>
+                ${isInitial ? '<span class="text-[8px] bg-zinc-800 text-zinc-500 px-1 rounded">INIT</span>' : ''}
+              </div>
+              <p class="text-[9px] text-zinc-500 font-mono">${date}</p>
+              
+              <details class="mt-2 group">
+                <summary class="text-[8px] text-zinc-600 group-hover:text-blue-400 cursor-pointer list-none font-bold uppercase tracking-widest transition-colors">
+                  [+] View Data Snapshot
+                </summary>
+                <div class="mt-2 p-2 bg-black/40 rounded border border-zinc-800/50">
+                   <pre class="text-[8px] text-zinc-400 overflow-x-auto max-h-40 font-mono">${JSON.stringify(item.payload, null, 2)}</pre>
+                </div>
+              </details>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }  
   // Фильтрация
   function handleFilter(val) {
     ui.searchInput.value = val;
