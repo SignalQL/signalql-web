@@ -1,8 +1,9 @@
 ---
+// src/pages/repositories.astro
 import Layout from '../layouts/Layout.astro';
 import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
 ---
-
+// src/pages/repositories.astro
 <Layout title="Your Repositories">
   <main class="p-8 max-w-7xl mx-auto text-white">
     <header class="mb-10 flex justify-between items-end">
@@ -37,7 +38,7 @@ import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
 </Layout>
 
 <script>
-  // Импортируем функцию рендеринга (мы создадим её ниже, чтобы не дублировать HTML)
+  // Import the function to render the dashboard (we'll create it below, so that it doesn't duplicate the HTML)
   import { renderRepositoryCard } from '../utils/renderRepo';
 
   async function fetchRepositories() {
@@ -56,10 +57,24 @@ import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/repositories?size=100`, {
-         headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
+      async function fetchOrgRepositories(orgId) {
+        const token = localStorage.getItem('signalql_token');
+        const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/repositories?size=100`, {
+          headers: { 
+            'ngrok-skip-browser-warning': 'true' ,
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        return response;
+      }
       
+      const response = await fetchOrgRepositories(orgId);
+      // Inside fetchRepositories, after getting the response
+      if (response.status === 401) {
+          // Redirect to login if token is expired or missing
+          window.location.href = '/login';
+          return;
+      }
       if (!response.ok) throw new Error('Failed to fetch repositories');
       
       const repos = await response.json();
@@ -72,8 +87,8 @@ import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
         return;
       }
 
-      // Отрисовываем карточки
-      grid.innerHTML = repos.map(repo => renderRepositoryCard(repo)).join('');
+      // Render repository cards
+      grid.innerHTML = repos.map(repo => renderRepositoryCard(repo, orgId)).join('');
       grid.classList.remove('hidden');
       countDisplay.textContent = `${repos.length} repositories`;
 
