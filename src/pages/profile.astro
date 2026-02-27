@@ -1,0 +1,189 @@
+
+---
+// src/pages/profile.astro
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="User Profile">
+  <main class="max-w-4xl mx-auto">
+    <header class="mb-10">
+      <h1 class="text-3xl font-bold mb-2 tracking-tight">Account Settings</h1>
+      <p class="text-zinc-500 text-sm italic">Manage your personal information and security preferences.</p>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="col-span-1">
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+          <div id="profile-avatar-large" class="w-16 h-16 bg-zinc-800 rounded-full mx-auto mb-4 border-2 border-zinc-700 flex items-center justify-center overflow-hidden">
+             <div class="animate-pulse w-full h-full bg-zinc-800"></div>
+          </div>
+          <h2 id="profile-name" class="text-sm font-bold text-zinc-200 truncate px-2 text-center">Loading...</h2>
+            <div class="mt-2 inline-block px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+            <span id="profile-role-display" class="text-[8px] text-blue-400 font-mono font-bold uppercase tracking-tighter">
+                Fetching...
+            </span>
+            </div>
+        </div>
+      </div>
+
+      <div class="col-span-2 space-y-6">
+        <section class="bg-zinc-900/30 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div class="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-400">Personal Information</h3>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 uppercase mb-1 ml-1">Full Name</label>
+              <div id="field-name" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-300 font-mono italic">
+                ...
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-zinc-500 uppercase mb-1 ml-1">Email Address</label>
+              <div id="field-email" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-zinc-300 font-mono italic">
+                ...
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-zinc-900/20 border border-zinc-800 rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
+                <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-400">Your Organizations</h3>
+                <span id="org-count" class="text-[9px] font-mono text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">0 active</span>
+            </div>
+            <div class="p-6 space-y-4">
+                <table class="w-full text-left border-collapse">
+                <thead class="bg-zinc-950/50">
+                    <tr>
+                    <th class="px-5 py-2 text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-800">Name</th>
+                    <th class="px-5 py-2 text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-800">Role</th>
+                    <th class="px-5 py-2 text-[9px] font-bold text-zinc-600 uppercase tracking-widest border-b border-zinc-800 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="org-list-body" class="divide-y divide-zinc-800/50">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="bg-zinc-900/30 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div class="px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-400">System Metadata</h3>
+          </div>
+          <div class="p-6">
+            <pre id="profile-raw" class="text-[10px] text-zinc-500 bg-zinc-950 p-4 rounded-lg border border-zinc-800 overflow-x-auto font-mono">
+{ "// waiting for context..." }
+            </pre>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  /**
+   * Populate profile page with data from the global user context
+   */
+  function initProfile() {
+    // 1. Check if context is already loaded in Layout
+    const data = window.__USER_CONTEXT__;
+
+    if (data) {
+      renderProfile(data);
+    } else {
+      // 2. If not yet loaded, wait for the custom event from Layout
+      window.addEventListener('user-context-loaded', (e: any) => {
+        renderProfile(e.detail);
+      });
+    }
+  }
+
+  function renderProfile(data) {
+    if (!data || !data.user) return;
+
+    const user = data.user;
+    
+    // 1. Определяем роль динамически
+    // Предполагаем, что роль лежит в data.role или user.role
+    const userRole = data.role || user.role || 'External User';
+    const roleDisplay = document.getElementById('profile-role-display');
+    
+    if (roleDisplay) {
+      roleDisplay.textContent = userRole;
+      
+      // Добавим немного визуальной логики: если админ — сделаем цвет другим
+      if (userRole.toLowerCase().includes('admin')) {
+        roleDisplay.classList.replace('text-blue-400', 'text-amber-400');
+        roleDisplay.parentElement.classList.replace('border-blue-500/20', 'border-amber-500/20');
+      }
+    }
+
+    // 2. Обновляем остальные поля
+    document.getElementById('profile-name').textContent = user.display_name || 'Anonymous User';
+    document.getElementById('field-name').textContent = user.display_name || 'Not set';
+    document.getElementById('field-email').textContent = user.email || 'No email provided';
+    
+    // 3. Обновляем JSON (теперь здесь будут реальные права)
+    const rawBox = document.getElementById('profile-raw');
+    if (rawBox) {
+      rawBox.textContent = JSON.stringify({
+        user_id: user.id,
+        role: userRole,
+        permissions: data.permissions || [],
+        org_context: new URLSearchParams(window.location.search).get('org_id'),
+        auth_type: 'jwt_standard'
+      }, null, 2);
+    }
+
+    // Обновляем аватар (тот же код, что был ранее)
+    const avatarContainer = document.getElementById('profile-avatar-large');
+    if (avatarContainer && user.avatar_url) {
+      avatarContainer.innerHTML = `<img src="${user.avatar_url}" class="w-full h-full object-cover" />`;
+    } else if (avatarContainer) {
+      const initials = user.display_name ? user.display_name.substring(0,2).toUpperCase() : '??';
+      avatarContainer.innerHTML = `<span class="text-xl font-bold text-zinc-600">${initials}</span>`;
+    }
+
+    // Render Organization List
+    const orgBody = document.getElementById('org-list-body');
+    const orgCount = document.getElementById('org-count');
+    
+    // Assuming data.organizations is an array from your /me endpoint
+    const organizations = data.organizations || [];
+
+    if (orgCount) orgCount.textContent = `${organizations.length} active`;
+
+    if (orgBody) {
+      if (organizations.length === 0) {
+        orgBody.innerHTML = `<tr><td colspan="3" class="px-5 py-8 text-center text-[10px] text-zinc-600 font-mono italic uppercase">No organizations associated with this account</td></tr>`;
+      } else {
+        orgBody.innerHTML = organizations.map(org => `
+          <tr class="hover:bg-zinc-800/20 transition-colors group">
+            <td class="px-5 py-3">
+              <div class="text-xs font-bold text-zinc-300 group-hover:text-blue-400 transition-colors">${org.name}</div>
+              <div class="text-[9px] text-zinc-600 font-mono uppercase tracking-tighter">${org.id}</div>
+            </td>
+            <td class="px-5 py-3">
+              <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${org.role === 'admin' ? 'border-amber-500/20 text-amber-500 bg-amber-500/5' : 'border-zinc-700 text-zinc-500'} uppercase">
+                ${org.role || 'member'}
+              </span>
+            </td>
+            <td class="px-5 py-3 text-right">
+              <a href="/signals?org_id=${org.id}" class="text-[9px] font-bold text-zinc-500 hover:text-white uppercase tracking-widest transition-colors border border-zinc-800 px-3 py-1 rounded hover:bg-zinc-800">
+                Enter Dashboard
+              </a>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+  }
+
+  // Initialize on load
+  initProfile();
+
+  // Support for Astro View Transitions
+  document.addEventListener('astro:after-swap', initProfile);
+</script>
