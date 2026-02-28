@@ -59,7 +59,7 @@ import RepositoryCard from '../components/dashboard/RepositoryCard.astro';
     try {
       async function fetchOrgRepositories(orgId) {
         const token = localStorage.getItem('signalql_token');
-        const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/repositories?size=100`, {
+        const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/repositories?size=100`, {
           headers: { 
             'ngrok-skip-browser-warning': 'true' ,
             'Authorization': `Bearer ${token}`
