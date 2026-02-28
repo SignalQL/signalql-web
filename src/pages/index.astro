@@ -13,4 +13,41 @@ const { Content } = await page.render();
     max-w-none">
     <Content />
   </article>
+  <section class="py-20 bg-zinc-950 text-center overflow-hidden">
+  <h2 class="text-3xl font-bold mb-12 text-white uppercase tracking-tighter">How it Works</h2>
+  
+  <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 px-6">
+    <div class="flex-1 p-6 bg-zinc-900/50 border border-zinc-800 rounded-2xl relative group">
+      <div class="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center mb-4 mx-auto border border-blue-500/20 text-blue-500">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+      </div>
+      <h4 class="text-sm font-bold text-zinc-100 uppercase mb-2">Code Change</h4>
+      <p class="text-xs text-zinc-500 font-mono">Developer pushes code to GitHub.</p>
+      
+      <div class="hidden md:block absolute top-1/2 -right-4 w-8 h-[2px] bg-gradient-to-r from-blue-500/50 to-transparent z-10">
+        <div class="w-2 h-2 bg-blue-500 rounded-full animate-ping absolute right-0 -top-[3px]"></div>
+      </div>
+    </div>
+
+    <div class="flex-1 p-6 bg-blue-600/5 border border-blue-500/20 rounded-2xl relative shadow-[0_0_30px_rgba(37,99,235,0.05)]">
+      <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center mb-4 mx-auto shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+        <span class="w-6 h-6 bg-white rounded-sm"></span>
+      </div>
+      <h4 class="text-sm font-bold text-white uppercase mb-2">SignalQL Engine</h4>
+      <p class="text-xs text-zinc-400 font-mono">Real-time analysis & policy enforcement.</p>
+    </div>
+
+    <div class="flex-1 p-6 bg-zinc-900/50 border border-zinc-800 rounded-2xl">
+      <div class="w-12 h-12 bg-emerald-500/10 rounded-lg flex items-center justify-center mb-4 mx-auto border border-emerald-500/20 text-emerald-500">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <h4 class="text-sm font-bold text-zinc-100 uppercase mb-2">Instant Alert</h4>
+      <p class="text-xs text-zinc-500 font-mono">Triage threats in your dashboard.</p>
+    </div>
+  </div>
+</section>
 </Layout>
