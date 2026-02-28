@@ -103,10 +103,32 @@ const { title, description, orgId = 'default-org' } = Astro.props;
         }
       }
 
-      // 1. Быстрая проверка токена
+    // 1. Конфигурация публичных путей
+      const publicPaths = [
+        '/',           // Landing page
+        '/login',      // Страница входа
+        '/register',   // Регистрация (если есть)
+        '/docs'        // Документация
+      ];
+
+      const currentPath = window.location.pathname;
+      
+      // Проверяем, является ли текущий путь публичным
+      // (используем startsWith для документации, если там много подстраниц)
+      const isPublicPath = publicPaths.some(path => 
+        path === '/' ? currentPath === '/' : currentPath.startsWith(path)
+      );
+
       const token = localStorage.getItem('signalql_token');
-      if (!token && window.location.pathname !== '/login') {
+
+      // 2. Логика перенаправления
+      if (!token && !isPublicPath) {
+        // Если токена нет и страница приватная — на логин
         window.location.href = '/login';
+      } else if (token && currentPath === '/login') {
+        // Если токен есть, а пользователь зашел на логин — кидаем в дашборд
+        // Нужно добавить проверку на наличие org_id или просто на /signals
+        window.location.href = '/signals';
       }
 
       // 2. Конфигурация меню
