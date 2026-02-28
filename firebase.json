@@ -1,6 +1,7 @@
 {
   "hosting": {
-    "public": "dist",
+    "site": "signalql-stg",
+    "public": "dist",    
     "ignore": [
       "firebase.json",
       "**/.*",
