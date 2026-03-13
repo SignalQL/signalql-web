@@ -97,7 +97,7 @@ import Layout from '../layouts/Layout.astro';
       }
 
       try {
-        const url = `${API_BASE_URL}/api/organizations/${orgId}`;
+        const url = `${API_BASE_URL}/organizations/${orgId}`;
         const response = await fetch(url, {
             headers: { 'ngrok-skip-browser-warning': 'true' }
         });

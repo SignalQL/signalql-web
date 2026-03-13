@@ -174,7 +174,7 @@ import Layout from '../layouts/Layout.astro';
 
     try {
       // 3. Build API endpoint
-      let endpoint = `/api/organizations/${orgId}/signals`;
+      let endpoint = `/organizations/${orgId}/signals`;
       if (query) {
         // We use query here, which is either from URL or manual Search click
         endpoint += `?search_query=${encodeURIComponent(query.toLowerCase())}`;
@@ -241,7 +241,7 @@ window.openSignalDetails = async (id) => {
 
     try {
       // IMPORTANT: Check path! If API_URL already has /api, just write /signals/...
-      const history = await secureFetch(`/api/signals/${id}/history`);
+      const history = await secureFetch(`/signals/${id}/history`);
       
       console.log("DEBUG: History received:", history); // Check F12 console
       
